@@ -1,9 +1,6 @@
 #/app.py
 import streamlit as st
 import pandas as pd
-import yaml
-from yaml.loader import SafeLoader
-import streamlit_authenticator as stauth
 from utils.db import init_db, log_activity
 from utils.common_utils import (
     sanitize_filename_component, convert_df_to_excel_bytes, generate_timestamp_filename,
@@ -13,10 +10,10 @@ from utils.common_utils import (
 import os
 from io import StringIO
 import csv
-from typing import Union, Tuple, List, Any # Assicurati che ci sia
+from typing import Union, Tuple, List, Any
 
 # Configurazione pagina
-st.set_page_config(page_title="Comunicazione Spese Centri Estivi", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Verifica Dati - Centri Estivi", layout="wide", initial_sidebar_state="expanded")
 
 # --- Costanti ---
 NOMI_COLONNE_PASTED_DATA = [
@@ -139,89 +136,9 @@ def convert_df_to_sifer_csv_bytes(df_input: pd.DataFrame) -> bytes:
     return b'\xef\xbb\xbf' + csv_string.encode('utf-8')
 
 # --- Funzioni UI ---
-def display_login_form():
-    st.subheader("🔑 Accesso Utente")
-    try:
-        with open('config.yaml') as file:
-            config_data = yaml.load(file, Loader=SafeLoader)
-    except FileNotFoundError:
-        st.error("🚨 Errore critico: File 'config.yaml' non trovato.")
-        log_activity("System_Login", "CONFIG_ERROR", "config.yaml not found")
-        st.session_state['authentication_status'] = None
-        st.stop()
-        return None
-    except yaml.YAMLError as e:
-        st.error(f"🚨 Errore critico nel parsing 'config.yaml': {e}.")
-        log_activity("System_Login", "CONFIG_YAML_ERROR", str(e))
-        st.session_state['authentication_status'] = None
-        st.stop()
-        return None
-    except Exception as e:
-        st.error(f"🚨 Errore critico caricamento config.yaml: {e}")
-        log_activity("System_Login", "CONFIG_LOAD_ERROR", str(e))
-        st.session_state['authentication_status'] = None
-        st.stop()
-        return None
-
-    try:
-        authenticator = stauth.Authenticate(
-            config_data['credentials'],
-            config_data['cookie']['name'],
-            config_data['cookie']['key'],
-            config_data['cookie']['expiry_days'],
-        )
-        st.session_state['authenticator'] = authenticator
-    except KeyError as e:
-        st.error(f"🚨 Errore config autenticazione: chiave '{e}' mancante.")
-        log_activity("System_Login", "AUTH_INIT_CONFIG_KEY_ERROR", str(e))
-        st.session_state['authentication_status'] = None
-        st.stop()
-        return None
-    except Exception as e:
-        st.error(f"🚨 Errore init autenticazione: {e}")
-        log_activity("System_Login", "AUTH_INIT_ERROR", str(e))
-        st.session_state['authentication_status'] = None
-        st.stop()
-        return None
-
-    name, authentication_status, username = None, None, None
-    try:
-        name, authentication_status, username = authenticator.login(
-            fields={'Form name': 'Accedi al sistema', 'Username': 'Nome Utente', 'Password': 'Password'},
-            location='main'
-        )
-    except KeyError as e:
-        st.error(f"⚠️ Errore (KeyError) login: '{e}'. Prova a cancellare i cookie del browser e ricaricare.")
-        log_activity("System_Login", "LOGIN_KEY_ERROR", str(e))
-        authentication_status = None
-    except Exception as e_login:
-        st.error(f"⚠️ Errore generico login: {e_login}")
-        log_activity("System_Login", "LOGIN_WIDGET_ERROR", str(e_login))
-        authentication_status = None
-
-    st.session_state['authentication_status'] = authentication_status
-
-    if authentication_status is True:
-        st.session_state.update({'name': name, 'username': username})
-        try:
-            user_config = config_data['credentials']['usernames'].get(username, {})
-            st.session_state['user_role'] = user_config.get('role', 'user')
-            log_activity(username, "LOGIN_SUCCESS", f"Role: {st.session_state['user_role']}")
-        except KeyError:
-            st.session_state['user_role'] = 'user'
-            log_activity(username, "LOGIN_CONFIG_WARNING", f"Ruolo utente per '{username}' non trovato, default 'user'.")
-            st.warning(f"Configurazione ruolo utente per '{username}' non trovata. Contattare admin.")
-
-    elif authentication_status is False:
-        st.error('🚫 Username o password non corretti.')
-        if username:
-            log_activity(username, "LOGIN_FAILED_CREDENTIALS")
-
-    return authentication_status
-
-def render_richiedente_form(username_param: str):
-    st.title("📝 Comunicazione Spese Centri Estivi (Verifica e Download)")
-    log_activity(username_param, "PAGE_VIEW", "Richiedente - Verifica e Download")
+def render_verifica_dati_page():
+    st.title("📝 Verifica Dati - Centri Estivi")
+    log_activity("Utente", "PAGE_VIEW", "Verifica e Download")
 
     st.markdown("Benvenuto! Inserisci dati, incolla spese da Excel (15 colonne), verifica e scarica.")
     st.info(f"**Nota:** I dati verificati qui **NON** vengono salvati automaticamente. Dovrai caricare il file CSV per SIFER (formato: {VERSIONE_TRACCIATO_SIFER}) scaricato nel sistema SIFER, se previsto.")
@@ -258,7 +175,7 @@ def render_richiedente_form(username_param: str):
                     st.session_state.metadati_confermati_richiedente = False
                     st.session_state.rif_pa_error_message = rif_message
 
-                log_activity(username_param, "METADATA_SUBMITTED_RICHIEDENTE", f"RifPA: {rif_pa_input_val_form}, Valid: {is_valid_rif}")
+                log_activity("Utente", "METADATA_SUBMITTED", f"RifPA: {rif_pa_input_val_form}, Valid: {is_valid_rif}")
                 st.rerun()
 
     if not st.session_state.get('metadati_confermati_richiedente', False):
@@ -281,7 +198,7 @@ def render_richiedente_form(username_param: str):
     results_container = st.container()
     if pasted_data:
         try:
-            log_activity(username_param, "PASTE_DATA_PROCESSING_RICHIEDENTE", f"Len: {len(pasted_data)} chars")
+            log_activity("Utente", "PASTE_DATA_PROCESSING", f"Len: {len(pasted_data)} chars")
             df_pasted_raw = pd.read_csv(StringIO(pasted_data), sep='\t', header=None, dtype=str, na_filter=False)
 
             # Gestione robusta del caso in cui manca l'ultima colonna (controlli formali)
@@ -291,7 +208,7 @@ def render_richiedente_form(username_param: str):
                 df_pasted_raw_fixed[df_pasted_raw.shape[1]] = "dato assente"
                 df_pasted_raw = df_pasted_raw_fixed
                 st.info("ℹ️ Colonna dei controlli formali non presente nei dati incollati. Aggiunto automaticamente 'dato assente'.")
-                log_activity(username_param, "PASTE_DATA_ADDED_MISSING_COLUMN", "Aggiunto 'dato assente' per controlli_formali_dichiarati")
+                log_activity("Utente", "PASTE_DATA_ADDED_MISSING_COLUMN", "Aggiunto 'dato assente' per controlli_formali_dichiarati")
             
             if df_pasted_raw.shape[1] != len(NOMI_COLONNE_PASTED_DATA):
                 results_container.error(f"🚨 Errore: Incollate {df_pasted_raw.shape[1]} colonne, attese {len(NOMI_COLONNE_PASTED_DATA)}.")
@@ -303,7 +220,7 @@ def render_richiedente_form(username_param: str):
             if 'controlli_formali_dichiarati' in df_pasted_raw.columns:
                 # Log dei valori originali per debugging
                 control_values = df_pasted_raw['controlli_formali_dichiarati'].tolist()
-                log_activity(username_param, "CONTROLLI_FORMALI_VALUES", f"Valori originali: {control_values}")
+                log_activity("Utente", "CONTROLLI_FORMALI_VALUES", f"Valori originali: {control_values}")
                 
                 df_pasted_raw['controlli_formali_dichiarati'] = df_pasted_raw['controlli_formali_dichiarati'].apply(
                     lambda x: "dato assente" if pd.isna(x) or (isinstance(x, str) and not x.strip()) else x
@@ -327,7 +244,7 @@ def render_richiedente_form(username_param: str):
             if righe_con_errori_mancanza:
                 error_message_display = "🚨 Errore: Dati obbligatori mancanti nelle righe incollate.\nCorreggere e reincollare.\n\n- " + "\n- ".join(righe_con_errori_mancanza)
                 results_container.error(error_message_display)
-                log_activity(username_param, "PASTE_DATA_MISSING_FIELDS", f"Errori: {'; '.join(righe_con_errori_mancanza)}")
+                log_activity("Utente", "PASTE_DATA_MISSING_FIELDS", f"Errori: {'; '.join(righe_con_errori_mancanza)}")
                 st.stop() 
 
             df_check = df_pasted_raw.copy()
@@ -369,7 +286,7 @@ def render_richiedente_form(username_param: str):
 
             if not has_blocking_errors_rich:
                 results_container.success("✅ Verifiche interne OK. Puoi scaricare i dati per SIFER.")
-                log_activity(username_param, "VALIDATION_SUCCESS_RICHIEDENTE", f"Righe: {len(df_check)}")
+                log_activity("Utente", "VALIDATION_SUCCESS", f"Righe: {len(df_check)}")
 
                 df_for_sifer_export = df_check.copy()
                 # Assicuriamoci che i controlli formali vengano passati correttamente
@@ -395,7 +312,7 @@ def render_richiedente_form(username_param: str):
                     # Log dell'anteprima per debugging
                     if 'controlli_formali' in df_display_anteprima.columns:
                         control_values_display = df_display_anteprima['controlli_formali'].tolist()
-                        log_activity(username_param, "CONTROLLI_FORMALI_ANTEPRIMA", f"Valori anteprima: {control_values_display}")
+                        log_activity("Utente", "CONTROLLI_FORMALI_ANTEPRIMA", f"Valori anteprima: {control_values_display}")
                     
                     st.dataframe(df_display_anteprima, use_container_width=True, hide_index=True)
 
@@ -440,43 +357,17 @@ def render_richiedente_form(username_param: str):
                 results_container.info("Nessun dato valido incollato.")
             else:
                  results_container.error("🚫 Rilevati errori bloccanti (❌) nelle verifiche interne. Correggere i dati e reincollare.")
-                 log_activity(username_param, "VALIDATION_FAILED_RICHIEDENTE", "Errori bloccanti rilevati.")
+                 log_activity("Utente", "VALIDATION_FAILED", "Errori bloccanti rilevati.")
 
         except pd.errors.EmptyDataError:
              results_container.warning("⚠️ Nessun dato da elaborare. Assicurati di aver incollato correttamente.")
         except ValueError as ve:
              results_container.error(f"🚨 Errore nella conversione dei dati: {ve}. Controlla formati numerici e date.")
-             log_activity(username_param, "PARSING_ERROR_RICHIEDENTE", str(ve))
+             log_activity("Utente", "PARSING_ERROR", str(ve))
         except Exception as e:
              results_container.error(f"🚨 Errore imprevisto durante l'elaborazione: {e}")
-             log_activity(username_param, "PROCESSING_ERROR_RICHIEDENTE", str(e))
+             log_activity("Utente", "PROCESSING_ERROR", str(e))
              st.exception(e)
-
-def main_app_router():
-    user_role = st.session_state.get('user_role', 'user')
-    username = st.session_state.get('username', 'N/D')
-    name = st.session_state.get('name', 'Utente')
-    auth_obj = st.session_state.get('authenticator')
-
-    if not auth_obj:
-        st.error("🚨 Sessione di autenticazione non valida o scaduta. Effettua nuovamente il login.")
-        st.session_state['authentication_status'] = None
-        if st.button("🔄 Ricarica e Vai al Login"): st.rerun()
-        st.stop()
-        return
-
-    st.sidebar.title(f"👤 Utente: {name}")
-    st.sidebar.write(f"🔖 Ruolo: {user_role.capitalize()}")
-    auth_obj.logout('🚪 Logout', 'sidebar', key='main_logout_btn')
-
-    if user_role == 'richiedente':
-        render_richiedente_form(username)
-    elif user_role in ['controllore', 'admin']:
-        st.success(f"Benvenuto/a {name}! Sei autenticato/a come {user_role.capitalize()}.")
-        st.info("Seleziona un'opzione dalla navigazione laterale (nelle sezioni 'pages') per accedere alle funzionalità specifiche del tuo ruolo.")
-    else:
-        st.error("🚫 Ruolo utente non riconosciuto o non autorizzato. Contattare l'amministratore.")
-        log_activity(username, "UNKNOWN_ROLE_ACCESS", f"Ruolo: {user_role}")
 
 if __name__ == "__main__":
     os.makedirs("database", exist_ok=True, mode=0o755)
@@ -485,15 +376,14 @@ if __name__ == "__main__":
         try:
             init_db()
             st.session_state.db_initialized = True
-            log_activity("System_AppMain", "APP_STARTUP", "Database inizializzato per la sessione.")
+            log_activity("Sistema", "APP_STARTUP", "Database inizializzato per la sessione.")
         except Exception as e_db:
             st.error(f"🚨 Errore critico durante l'inizializzazione del database: {e_db}")
-            log_activity("System_AppMain", "DB_INIT_ERROR", str(e_db))
+            log_activity("Sistema", "DB_INIT_ERROR", str(e_db))
             st.stop()
 
+    # Inizializzazione session state
     default_session_keys = {
-        'authentication_status': None, 'name': None, 'username': None,
-        'authenticator': None, 'user_role': None,
         'doc_metadati_richiedente': st.session_state.get('doc_metadati_richiedente', {
             'rif_pa': '', 'cup': '', 'distretto': '', 'comune_capofila': '',
             }),
@@ -503,10 +393,15 @@ if __name__ == "__main__":
     for key, default_value in default_session_keys.items():
         st.session_state.setdefault(key, default_value)
 
-    if not st.session_state.get('authentication_status'):
-        auth_status = display_login_form()
-        if not auth_status: st.stop()
+    # Sidebar informazioni
+    st.sidebar.title("🏖️ Centri Estivi RER")
+    st.sidebar.info("Applicazione per la gestione e validazione dati spese Centri Estivi")
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📄 Pagine disponibili")
+    st.sidebar.markdown("- **Verifica Dati**: Valida e scarica CSV SIFER")
+    st.sidebar.markdown("- **Carica e Salva**: Carica CSV SIFER e salva in DB")
+    st.sidebar.markdown("- **Log Attività**: Visualizza log operazioni")
 
-    if st.session_state.get('authentication_status') is True:
-        main_app_router()
+    # Renderizza la pagina principale
+    render_verifica_dati_page()
 #/app.py

@@ -6,31 +6,26 @@ Questo file fornisce indicazioni a Claude Code (claude.ai/code) quando lavora co
 
 Questa è un'**applicazione web basata su Streamlit** per la gestione e validazione dei dati di spesa dei Centri Estivi per la Regione Emilia-Romagna (RER). L'applicazione gestisce dati formattati SIFER (Sistema Informativo Fondi Europei Regionali), esegue validazioni complete e memorizza i record in un database SQLite.
 
-### Ruoli Chiave e Flussi di Lavoro
+### Flussi di Lavoro
 
-L'applicazione supporta tre ruoli utente con flussi di lavoro distinti:
+L'applicazione è **senza autenticazione** e offre due flussi di lavoro principali:
 
-1. **Richiedente**: Incolla i dati di spesa da Excel, li valida e scarica file CSV per l'invio a SIFER
-2. **Controllore**: Carica file CSV SIFER, valida i dati e salva nel database dopo la verifica
-3. **Admin**: Accesso completo a tutte le funzionalità più gestione utenti
+1. **Verifica Dati**: Incolla i dati di spesa da Excel (15 colonne), li valida e scarica file CSV formattato SIFER
+2. **Carica e Salva**: Carica file CSV SIFER, valida i dati e salva nel database dopo la verifica
+3. **Log Attività**: Visualizza il log completo delle operazioni del sistema
 
 ## Architettura
 
 ### Struttura dell'Applicazione
 
 ```
-app.py                          # Entry point principale con login e flusso Richiedente
+app.py                          # Pagina principale - Verifica Dati
 pages/
-  01_Gestione_Dati_Controllore.py   # Flusso Controllore (carica, valida, salva in DB)
-  02_Log_Attivita.py                 # Visualizzatore log attività
-  03_Admin_Settings.py               # Gestione utenti Admin
-  04_Dashboard_Dati.py               # Dashboard dati e operazioni bulk
+  01_Carica_Salva.py            # Carica CSV SIFER e salva in database
+  02_Log_Attivita.py            # Visualizzatore log attività
 utils/
   db.py                         # Operazioni database e logging attività
   common_utils.py               # Funzioni di validazione e processamento dati
-  auth.py                       # Utilità autenticazione
-  hash_password.py              # Utilità hashing password
-config.yaml                     # Credenziali utente e configurazione autenticazione
 database/
   spese.db                      # Database SQLite (auto-creato)
   activity.log                  # Log attività applicazione
@@ -38,18 +33,22 @@ database/
 
 ### Flusso dei Dati
 
-**Flusso Richiedente:**
+**Flusso "Verifica Dati" (pagina principale):**
 1. L'utente incolla dati Excel a 15 colonne (separati da tab)
 2. L'app valida CF (codice fiscale), date, importi, regole contributi
 3. L'utente scarica CSV formattato SIFER (con header versione)
 4. **I dati NON vengono salvati nel database** in questo flusso
 
-**Flusso Controllore:**
+**Flusso "Carica e Salva" (pagina secondaria):**
 1. Caricamento file CSV SIFER (separato da virgola, valori quotati)
 2. Parsing colonne SIFER verso formato interno
-3. Validazione dati (stesse validazioni del Richiedente)
+3. Validazione dati (stesse validazioni del flusso Verifica Dati)
 4. Verifica unicità Rif. PA nel database
 5. Salvataggio nel database se tutte le validazioni passano
+
+**Log Attività:**
+- Tutte le operazioni vengono loggate con username generico "Utente" o "Sistema"
+- Il log è visibile senza autenticazione nella pagina dedicata
 
 ### Formati Dati Chiave
 
@@ -172,17 +171,12 @@ if has_errors:
 
 Chiavi session state critiche in Streamlit:
 
-**Autenticazione:**
-- `authentication_status`: True/False/None
-- `username`, `name`, `user_role`
-- `authenticator`: oggetto stauth.Authenticate
-
-**Flusso Richiedente:**
+**Pagina "Verifica Dati":**
 - `doc_metadati_richiedente`: dict con rif_pa, cup, distretto, comune_capofila
 - `metadati_confermati_richiedente`: boolean
 - `rif_pa_error_message`: errore validazione per Rif. PA
 
-**Flusso Controllore:**
+**Pagina "Carica e Salva":**
 - `ctrl_df_sifer_loaded`: DataFrame SIFER grezzo
 - `ctrl_df_internal_for_validation`: formato interno parsato
 - `ctrl_df_ready_for_db`: DataFrame finale pronto per insert
@@ -192,20 +186,6 @@ Chiavi session state critiche in Streamlit:
 - `ctrl_last_uploaded_filename`: traccia cambi file
 
 **Importante:** Pulire il session state rilevante quando il file cambia o dopo salvataggio riuscito per evitare problemi con dati obsoleti.
-
-## Configurazione e Sicurezza
-
-**config.yaml:**
-- Contiene credenziali utente con password hashate bcrypt
-- Configurazione cookie per gestione sessione
-- Ruoli utente: admin, controllore, richiedente
-- **Mai committare password reali** - file corrente ha solo credenziali di test
-
-**Hashing Password:**
-```bash
-# Generare nuovo hash password
-python utils/hash_password.py
-```
 
 ## Problemi Comuni e Soluzioni
 
@@ -234,6 +214,9 @@ python utils/hash_password.py
 Branch corrente: `CentriEstivi_def` (nessun branch main configurato)
 
 **Modifiche recenti:**
-- Modificati: [app.py](app.py), [pages/01_Gestione_Dati_Controllore.py](pages/01_Gestione_Dati_Controllore.py)
-- Modificati: [utils/common_utils.py](utils/common_utils.py), [utils/db.py](utils/db.py)
-- Focus: Refactoring, miglioramenti type safety e aggiornamenti gestione controlli formali
+- **Semplificazione applicazione**: Rimossa autenticazione e gestione ruoli
+- Creati: [pages/01_Carica_Salva.py](pages/01_Carica_Salva.py)
+- Modificati: [app.py](app.py), [pages/02_Log_Attivita.py](pages/02_Log_Attivita.py)
+- Modificati: [requirements.txt](requirements.txt) (rimosse dipendenze autenticazione)
+- Rimossi: `config.yaml`, `auth.py`, `hash_password.py`, vecchie pages con autenticazione
+- Focus: Applicazione semplificata senza login, unico utente generico

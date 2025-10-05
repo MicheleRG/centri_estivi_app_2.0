@@ -1,5 +1,6 @@
 # Ambiente Virtuale Python
-.centiest/ 
+.centiest/
+.venv/
 *.pyc
 __pycache__/
 
