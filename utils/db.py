@@ -79,7 +79,7 @@ def init_db(existing_conn: Optional[sqlite3.Connection] = None):
             codice_fiscale_bambino TEXT NOT NULL, valore_contributo_fse REAL DEFAULT 0.0, 
             altri_contributi REAL DEFAULT 0.0, quota_retta_destinatario REAL DEFAULT 0.0, 
             totale_retta REAL DEFAULT 0.0, numero_settimane_frequenza INTEGER DEFAULT 0, 
-            controlli_formali REAL DEFAULT 0.0, timestamp_caricamento DATETIME NOT NULL, 
+            controlli_formali TEXT, timestamp_caricamento DATETIME NOT NULL, 
             utente_caricamento TEXT NOT NULL,
             UNIQUE(id_trasmissione, codice_fiscale_bambino, data_mandato, centro_estivo, valore_contributo_fse) 
         )""")

@@ -100,8 +100,13 @@ def convert_df_to_sifer_csv_bytes(df_input: pd.DataFrame) -> bytes:
         data_pag_val = app_row.get('data_mandato')
         sifer_row['Data pagamento'] = pd.to_datetime(data_pag_val, errors='coerce').strftime('%d/%m/%Y') if pd.notna(data_pag_val) else "01/01/1900"
         
-        controlli_formali_val = app_row.get('controlli_formali_dichiarati', 0.0)
-        sifer_row['Tipo pagamento'] = f"{float(controlli_formali_val if pd.notna(controlli_formali_val) else 0.0):.2f}".replace('.', ',')[:255]
+        controlli_formali_val = app_row.get('controlli_formali_dichiarati', '')
+        # Gestiamo il caso in cui il valore potrebbe essere vuoto o None
+        if pd.isna(controlli_formali_val):
+            controlli_formali_val = "dato assente"
+        # Log per debugging
+        log_activity("SIFER_CSV_CONTROLLI", f"Controllo formale per riga {idx}: {controlli_formali_val}")
+        sifer_row['Tipo pagamento'] = str(controlli_formali_val)[:255]
         
         sifer_row['Nr. documento'] = str(app_row.get('numero_mandato', 'ND'))[:255]
         
@@ -279,14 +284,33 @@ def render_richiedente_form(username_param: str):
             log_activity(username_param, "PASTE_DATA_PROCESSING_RICHIEDENTE", f"Len: {len(pasted_data)} chars")
             df_pasted_raw = pd.read_csv(StringIO(pasted_data), sep='\t', header=None, dtype=str, na_filter=False)
 
+            # Gestione robusta del caso in cui manca l'ultima colonna (controlli formali)
+            if df_pasted_raw.shape[1] == len(NOMI_COLONNE_PASTED_DATA) - 1:
+                # Aggiungiamo una colonna vuota alla fine
+                df_pasted_raw_fixed = pd.DataFrame(df_pasted_raw.values, columns=range(df_pasted_raw.shape[1]))
+                df_pasted_raw_fixed[df_pasted_raw.shape[1]] = "dato assente"
+                df_pasted_raw = df_pasted_raw_fixed
+                st.info("ℹ️ Colonna dei controlli formali non presente nei dati incollati. Aggiunto automaticamente 'dato assente'.")
+                log_activity(username_param, "PASTE_DATA_ADDED_MISSING_COLUMN", "Aggiunto 'dato assente' per controlli_formali_dichiarati")
+            
             if df_pasted_raw.shape[1] != len(NOMI_COLONNE_PASTED_DATA):
                 results_container.error(f"🚨 Errore: Incollate {df_pasted_raw.shape[1]} colonne, attese {len(NOMI_COLONNE_PASTED_DATA)}.")
                 st.stop()
 
             df_pasted_raw.columns = NOMI_COLONNE_PASTED_DATA
+            
+            # Sostituiamo i valori vuoti nella colonna controlli_formali_dichiarati con "dato assente"
+            if 'controlli_formali_dichiarati' in df_pasted_raw.columns:
+                # Log dei valori originali per debugging
+                control_values = df_pasted_raw['controlli_formali_dichiarati'].tolist()
+                log_activity(username_param, "CONTROLLI_FORMALI_VALUES", f"Valori originali: {control_values}")
+                
+                df_pasted_raw['controlli_formali_dichiarati'] = df_pasted_raw['controlli_formali_dichiarati'].apply(
+                    lambda x: "dato assente" if pd.isna(x) or (isinstance(x, str) and not x.strip()) else x
+                )
 
             campi_obbligatori_input = [
-                col for col in NOMI_COLONNE_PASTED_DATA if col != 'altri_contributi'
+                col for col in NOMI_COLONNE_PASTED_DATA if col != 'altri_contributi' and col != 'controlli_formali_dichiarati'
             ]
 
             righe_con_errori_mancanza = []
@@ -316,7 +340,7 @@ def render_richiedente_form(username_param: str):
             df_check['data_mandato'] = pd.to_datetime(df_check['data_mandato_originale'], errors='coerce', dayfirst=True).dt.date
 
             currency_cols = ['importo_mandato','valore_contributo_fse','altri_contributi',
-                               'quota_retta_destinatario','totale_retta','controlli_formali_dichiarati']
+                               'quota_retta_destinatario','totale_retta']
             for col in currency_cols:
                 df_check[col] = df_check[col].apply(parse_excel_currency)
 
@@ -348,7 +372,8 @@ def render_richiedente_form(username_param: str):
                 log_activity(username_param, "VALIDATION_SUCCESS_RICHIEDENTE", f"Righe: {len(df_check)}")
 
                 df_for_sifer_export = df_check.copy()
-                df_for_sifer_export['controlli_formali'] = round(df_for_sifer_export['valore_contributo_fse'] * 0.05, 2)
+                # Assicuriamoci che i controlli formali vengano passati correttamente
+                df_for_sifer_export['controlli_formali'] = df_for_sifer_export['controlli_formali_dichiarati']
 
                 if 'codice_fiscale_bambino_pulito' in df_for_sifer_export.columns:
                     if 'codice_fiscale_bambino' in df_for_sifer_export.columns and 'codice_fiscale_bambino_pulito' != 'codice_fiscale_bambino':
@@ -356,9 +381,22 @@ def render_richiedente_form(username_param: str):
                     df_for_sifer_export.rename(columns={'codice_fiscale_bambino_pulito': 'codice_fiscale_bambino'}, inplace=True)
                 
                 with results_container.expander("⬇️ 4. Anteprima Dati (formato app) e Download SIFER", expanded=True):
-                    df_display_anteprima = df_for_sifer_export[[col for col in COLONNE_INTERMEDIE_APP if col in df_for_sifer_export.columns]].copy()
+                    # Creiamo una copia delle colonne intermedie e aggiungiamo i controlli formali dichiarati per la visualizzazione
+                    cols_to_display = [col for col in COLONNE_INTERMEDIE_APP if col in df_for_sifer_export.columns]
+                    
+                    # Assicuriamoci che il campo controlli_formali sia incluso nella visualizzazione
+                    if 'controlli_formali' not in cols_to_display and 'controlli_formali' in df_for_sifer_export.columns:
+                        cols_to_display.append('controlli_formali')
+                    
+                    df_display_anteprima = df_for_sifer_export[cols_to_display].copy()
                     if 'data_mandato' in df_display_anteprima.columns:
                         df_display_anteprima['data_mandato'] = pd.to_datetime(df_display_anteprima['data_mandato'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+                    
+                    # Log dell'anteprima per debugging
+                    if 'controlli_formali' in df_display_anteprima.columns:
+                        control_values_display = df_display_anteprima['controlli_formali'].tolist()
+                        log_activity(username_param, "CONTROLLI_FORMALI_ANTEPRIMA", f"Valori anteprima: {control_values_display}")
+                    
                     st.dataframe(df_display_anteprima, use_container_width=True, hide_index=True)
 
                     rif_pa_s = sanitize_filename_component(st.session_state.doc_metadati_richiedente.get('rif_pa',''))
@@ -380,10 +418,9 @@ def render_richiedente_form(username_param: str):
 
                 with results_container.expander("📊 5. Quadro di Controllo (basato su dati app)", expanded=True):
                     qc_data = {
-                        "Voce": ["Tot. costi diretti (A - Contr. FSE)", "Quota costi indiretti (5% di A)",
-                                 "Contr. complessivo erogabile (A + 5%A)", "Tot. quote a carico destinatario (C)"],
-                        "Valore (€)": [df_for_sifer_export['valore_contributo_fse'].sum(), df_for_sifer_export['controlli_formali'].sum(),
-                                     df_for_sifer_export['valore_contributo_fse'].sum() + df_for_sifer_export['controlli_formali'].sum(),
+                        "Voce": ["Tot. costi diretti (A - Contr. FSE)", 
+                                 "Tot. quote a carico destinatario (C)"],
+                        "Valore (€)": [df_for_sifer_export['valore_contributo_fse'].sum(), 
                                      df_for_sifer_export['quota_retta_destinatario'].sum()]
                     }
                     df_qc = pd.DataFrame(qc_data)

@@ -219,7 +219,7 @@ if uploaded_file_ctrl is not None and st.session_state.get('ctrl_df_sifer_loaded
             df_internal['totale_retta'] = parsed_notes.apply(lambda x: x[2])
             
             df_internal['numero_settimane_frequenza'] = pd.to_numeric(df_sifer_raw['Numero progetto'], errors='coerce').fillna(0).astype(int)
-            df_internal['controlli_formali_dichiarati'] = df_sifer_raw['Tipo pagamento'].apply(parse_excel_currency)
+            df_internal['controlli_formali_dichiarati'] = df_sifer_raw['Tipo pagamento']
             
             st.session_state.ctrl_df_sifer_loaded = df_sifer_raw
             st.session_state.ctrl_df_internal_for_validation = df_internal.copy()
@@ -264,15 +264,23 @@ if st.session_state.get('ctrl_validation_results_df') is not None:
             df_to_save_db = df_validated_for_db_prep.copy()
             df_to_save_db['id_trasmissione'] = str(uuid.uuid4())
             
-            df_to_save_db['controlli_formali'] = round(df_to_save_db['valore_contributo_fse'] * 0.05, 2)
+            # Non calcoliamo più i controlli formali, ma utilizziamo direttamente il valore dichiarato
+            # df_to_save_db['controlli_formali'] = round(df_to_save_db['valore_contributo_fse'] * 0.05, 2)
             
-            cols_to_drop_for_db = ['codice_fiscale_bambino_pulito', 'data_mandato_originale', 'controlli_formali_dichiarati']
+            cols_to_drop_for_db = ['codice_fiscale_bambino_pulito', 'data_mandato_originale']
             df_to_save_db.drop(columns=cols_to_drop_for_db, inplace=True, errors='ignore')
             
             for col_db in DB_COLS_ATTESE:
                 if col_db not in df_to_save_db.columns:
                     if col_db in ['cup', 'distretto', 'comune_capofila', 'comune_centro_estivo']:
                          df_to_save_db[col_db] = None if pd.isna(df_to_save_db.get(col_db)) else df_to_save_db.get(col_db) # Mantieni se già popolato
+                    elif col_db == 'controlli_formali':
+                         # Utilizziamo il valore dichiarato per i controlli formali
+                         controlli_dichiarati = df_to_save_db.get('controlli_formali_dichiarati', '')
+                         # Gestiamo il caso in cui il valore sia NaN o None
+                         if pd.isna(controlli_dichiarati):
+                             controlli_dichiarati = ""
+                         df_to_save_db[col_db] = controlli_dichiarati
                     elif col_db not in df_to_save_db: 
                          df_to_save_db[col_db] = 0.0 if 'importo' in col_db or 'contributo' in col_db or 'retta' in col_db or 'frequenza' in col_db else None
             

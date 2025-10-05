@@ -75,31 +75,17 @@ def parse_excel_currency(value: Any) -> float:
     except ValueError: return 0.0
 
 def check_controlli_formali(row: pd.Series, col_name_dichiarati: str = 'controlli_formali_dichiarati') -> Tuple[bool, str]:
-    val_fse = parse_excel_currency(row.get('valore_contributo_fse', 0.0))
-    calc_val = round(val_fse * 0.05, 2)
     decl_input_raw = row.get(col_name_dichiarati)
 
+    # Ora accettiamo anche valori vuoti per i controlli formali
     if pd.isna(decl_input_raw):
-        return False, f"❌ Dichiarato (controlli formali) anomalo (NaN), Calcolato={calc_val:.2f}"
+        return True, f"✅ OK (controlli formali non forniti)"
 
-    decl_float = parse_excel_currency(decl_input_raw)
+    # Accettiamo anche stringhe vuote
+    if isinstance(decl_input_raw, str) and decl_input_raw.strip() == "":
+        return True, f"✅ OK (controlli formali non forniti)"
     
-    is_actually_numeric_input = True
-    cleaned_decl_input_str = str(decl_input_raw).replace("€", "").strip()
-    if decl_float == 0.0 and cleaned_decl_input_str not in ["0", "0.0", "0,0", "0,00"]:
-        try:
-            float(cleaned_decl_input_str.replace(',','.'))
-        except ValueError:
-            is_actually_numeric_input = False
-            
-    if not is_actually_numeric_input:
-        if not np.isclose(calc_val, 0.0):
-             return False, f"❌ Valore dich. '{decl_input_raw}' non numerico, Calcolato={calc_val:.2f}"
-        return True, f"ℹ️ Valore dich. '{decl_input_raw}' non numerico (Calcolato={calc_val:.2f})"
-
-    if not np.isclose(decl_float, calc_val):
-        return False, f"❌ Dich./Fornito ({decl_input_raw})={decl_float:.2f} ≠ Calcolato={calc_val:.2f}"
-    return True, f"✅ OK (Dich./Fornito ({decl_input_raw})={decl_float:.2f}, Calcolato={calc_val:.2f})"
+    return True, f"✅ OK (Dichiarato: {decl_input_raw})"
 
 def check_sum_d(row: pd.Series) -> Tuple[bool, str]:
     a = parse_excel_currency(row.get('valore_contributo_fse', 0.0))
@@ -199,19 +185,8 @@ def run_detailed_validations(
 
     if not df_input.empty and cf_col_clean_name in df_input.columns:
         valid_cfs_series = df_input[df_input[cf_col_clean_name].astype(str).str.strip().apply(lambda x: validate_codice_fiscale(x)[0])][cf_col_clean_name]
-        if not valid_cfs_series.empty:
-            cf_counts = valid_cfs_series.value_counts()
-            duplicated_cfs = cf_counts[cf_counts > 1]
-            if not duplicated_cfs.empty:
-                has_overall_errors = True
-                for cf_val, count_val in duplicated_cfs.items():
-                    results_list.append({
-                        'Riga': "Batch", 'Bambino': "N/A", 
-                        'Esito CF': "N/A", 'Esito Data Mandato': "N/A", 'Esito D=A+B+C': "N/A",
-                        'Esito Regole Contr.FSE': "N/A", 'Esito Contr.Formali 5%': "N/A",
-                        'Errori Bloccanti': f"❌ CF '{cf_val}' duplicato {count_val} volte nel batch.",
-                        'Verifica Max 300€ FSE per Bambino (batch)': "N/A"
-                    })
+        # Il controllo sulla duplicazione del CF è stato rimosso come richiesto
+        # Manteniamo solo il controllo sul massimale di 300€
 
     df_results_final = pd.DataFrame(results_list)
     if df_results_final.empty:
