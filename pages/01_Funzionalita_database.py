@@ -291,12 +291,13 @@ if st.session_state.get('ctrl_validation_results_df') is not None:
             for col_db in DB_COLS_ATTESE:
                 if col_db not in df_to_save_db.columns:
                     if col_db in ['cup', 'distretto', 'comune_capofila', 'comune_centro_estivo']:
-                         df_to_save_db[col_db] = None if pd.isna(df_to_save_db.get(col_db)) else df_to_save_db.get(col_db)
+                         df_to_save_db[col_db] = None
                     elif col_db == 'controlli_formali':
-                         controlli_dichiarati = df_to_save_db.get('controlli_formali_dichiarati', '')
-                         if pd.isna(controlli_dichiarati):
-                             controlli_dichiarati = ""
-                         df_to_save_db[col_db] = controlli_dichiarati
+                         # Copia la colonna dichiarati se esiste, altrimenti stringa vuota
+                         if 'controlli_formali_dichiarati' in df_to_save_db.columns:
+                             df_to_save_db[col_db] = df_to_save_db['controlli_formali_dichiarati'].fillna("")
+                         else:
+                             df_to_save_db[col_db] = ""
                     elif col_db not in df_to_save_db:
                          df_to_save_db[col_db] = 0.0 if 'importo' in col_db or 'contributo' in col_db or 'retta' in col_db or 'frequenza' in col_db else None
 
