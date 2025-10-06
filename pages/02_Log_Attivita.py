@@ -4,6 +4,28 @@ from utils.db import get_log_content, log_activity
 
 st.set_page_config(page_title="Log Attività - Centri Estivi", layout="wide")
 
+# --- Controllo Password ---
+PASSWORD = "nidi2025"
+
+if 'log_authenticated' not in st.session_state:
+    st.session_state.log_authenticated = False
+
+if not st.session_state.log_authenticated:
+    st.title("🔒 Accesso Log Attività")
+    st.markdown("Questa pagina richiede autenticazione.")
+
+    password_input = st.text_input("Inserisci la password:", type="password", key="log_password_input")
+
+    if st.button("Accedi", key="log_login_btn"):
+        if password_input == PASSWORD:
+            st.session_state.log_authenticated = True
+            st.success("✅ Accesso consentito!")
+            st.rerun()
+        else:
+            st.error("❌ Password errata!")
+
+    st.stop()
+
 # --- Sidebar ---
 st.sidebar.title("🏖️ Centri Estivi RER")
 st.sidebar.info("Applicazione per la gestione e validazione dati spese Centri Estivi")

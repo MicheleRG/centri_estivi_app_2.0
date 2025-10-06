@@ -1,4 +1,4 @@
-#/pages/01_Carica_Salva.py
+#/pages/01_Funzionalita_database.py
 import streamlit as st
 import pandas as pd
 from utils.db import add_multiple_spese, log_activity, check_rif_pa_exists
@@ -12,7 +12,29 @@ from io import StringIO
 import re
 from typing import Tuple, Union
 
-st.set_page_config(page_title="Carica e Salva - Centri Estivi", layout="wide")
+st.set_page_config(page_title="Funzionalità database - Centri Estivi", layout="wide")
+
+# --- Controllo Password ---
+PASSWORD = "nidi2025"
+
+if 'db_authenticated' not in st.session_state:
+    st.session_state.db_authenticated = False
+
+if not st.session_state.db_authenticated:
+    st.title("🔒 Accesso Funzionalità Database")
+    st.markdown("Questa pagina richiede autenticazione.")
+
+    password_input = st.text_input("Inserisci la password:", type="password", key="db_password_input")
+
+    if st.button("Accedi", key="db_login_btn"):
+        if password_input == PASSWORD:
+            st.session_state.db_authenticated = True
+            st.success("✅ Accesso consentito!")
+            st.rerun()
+        else:
+            st.error("❌ Password errata!")
+
+    st.stop()
 
 # --- Costanti Specifiche Pagina ---
 COLONNE_SIFER_INPUT = [
@@ -103,8 +125,8 @@ st.sidebar.title("🏖️ Centri Estivi RER")
 st.sidebar.info("Applicazione per la gestione e validazione dati spese Centri Estivi")
 
 # --- Logica Pagina ---
-st.title("⚙️ Carica e Salva - CSV SIFER nel Database")
-log_activity("Utente", "PAGE_VIEW", "Carica e Salva CSV SIFER")
+st.title("🗄️ Funzionalità Database")
+log_activity("Utente", "PAGE_VIEW", "Funzionalità Database")
 
 st.markdown("Carica il file CSV formattato SIFER, verifica unicità Rif. PA, valida dati e salva nel DB.")
 

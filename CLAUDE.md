@@ -8,21 +8,21 @@ Questa è un'**applicazione web basata su Streamlit** per la gestione e validazi
 
 ### Flussi di Lavoro
 
-L'applicazione è **senza autenticazione** e offre due flussi di lavoro principali:
+L'applicazione offre tre funzionalità principali:
 
-1. **Verifica Dati**: Incolla i dati di spesa da Excel (15 colonne), li valida e scarica file CSV formattato SIFER
-2. **Carica e Salva**: Carica file CSV SIFER, valida i dati e salva nel database dopo la verifica
-3. **Log Attività**: Visualizza il log completo delle operazioni del sistema
+1. **Generazione .csv per Sifer** (pagina principale, accesso libero): Incolla i dati di spesa da Excel (15 colonne), li valida e scarica file CSV formattato SIFER
+2. **Funzionalità database** (protetta da password `nidi2025`): Carica file CSV SIFER, valida i dati e salva nel database dopo la verifica
+3. **Log Attività** (protetta da password `nidi2025`): Visualizza il log completo delle operazioni del sistema
 
 ## Architettura
 
 ### Struttura dell'Applicazione
 
 ```
-app.py                          # Pagina principale - Verifica Dati
+app.py                          # Pagina principale - Generazione .csv per Sifer (accesso libero)
 pages/
-  01_Carica_Salva.py            # Carica CSV SIFER e salva in database
-  02_Log_Attivita.py            # Visualizzatore log attività
+  01_Funzionalita_database.py  # Carica CSV SIFER e salva in database (password: nidi2025)
+  02_Log_Attivita.py            # Visualizzatore log attività (password: nidi2025)
 utils/
   db.py                         # Operazioni database e logging attività
   common_utils.py               # Funzioni di validazione e processamento dati
@@ -33,22 +33,25 @@ database/
 
 ### Flusso dei Dati
 
-**Flusso "Verifica Dati" (pagina principale):**
+**Flusso "Generazione .csv per Sifer" (pagina principale, accesso libero):**
 1. L'utente incolla dati Excel a 15 colonne (separati da tab)
 2. L'app valida CF (codice fiscale), date, importi, regole contributi
 3. L'utente scarica CSV formattato SIFER (con header versione)
-4. **I dati NON vengono salvati nel database** in questo flusso
+4. Visualizza Quadro di Controllo (solo visualizzazione, nessun download)
+5. **I dati NON vengono salvati nel database** in questo flusso
 
-**Flusso "Carica e Salva" (pagina secondaria):**
-1. Caricamento file CSV SIFER (separato da virgola, valori quotati)
-2. Parsing colonne SIFER verso formato interno
-3. Validazione dati (stesse validazioni del flusso Verifica Dati)
-4. Verifica unicità Rif. PA nel database
-5. Salvataggio nel database se tutte le validazioni passano
+**Flusso "Funzionalità database" (protetto con password `nidi2025`):**
+1. Inserimento password per accedere
+2. Caricamento file CSV SIFER (separato da virgola, valori quotati)
+3. Parsing colonne SIFER verso formato interno
+4. Validazione dati (stesse validazioni del flusso principale)
+5. Verifica unicità Rif. PA nel database
+6. Salvataggio nel database se tutte le validazioni passano
 
-**Log Attività:**
+**Log Attività (protetto con password `nidi2025`):**
+- Inserimento password per accedere
 - Tutte le operazioni vengono loggate con username generico "Utente" o "Sistema"
-- Il log è visibile senza autenticazione nella pagina dedicata
+- Visualizzazione log completo con possibilità di aggiornamento
 
 ### Formati Dati Chiave
 
@@ -171,12 +174,17 @@ if has_errors:
 
 Chiavi session state critiche in Streamlit:
 
-**Pagina "Verifica Dati":**
+**Autenticazione Pagine:**
+- `db_authenticated`: boolean, True se l'utente ha inserito correttamente la password per "Funzionalità database"
+- `log_authenticated`: boolean, True se l'utente ha inserito correttamente la password per "Log Attività"
+- Password: `nidi2025` (hardcoded nelle pagine protette)
+
+**Pagina "Generazione .csv per Sifer":**
 - `doc_metadati_richiedente`: dict con rif_pa, cup, distretto, comune_capofila
 - `metadati_confermati_richiedente`: boolean
 - `rif_pa_error_message`: errore validazione per Rif. PA
 
-**Pagina "Carica e Salva":**
+**Pagina "Funzionalità database":**
 - `ctrl_df_sifer_loaded`: DataFrame SIFER grezzo
 - `ctrl_df_internal_for_validation`: formato interno parsato
 - `ctrl_df_ready_for_db`: DataFrame finale pronto per insert
@@ -214,9 +222,14 @@ Chiavi session state critiche in Streamlit:
 Branch corrente: `CentriEstivi_def` (nessun branch main configurato)
 
 **Modifiche recenti:**
-- **Semplificazione applicazione**: Rimossa autenticazione e gestione ruoli
-- Creati: [pages/01_Carica_Salva.py](pages/01_Carica_Salva.py)
-- Modificati: [app.py](app.py), [pages/02_Log_Attivita.py](pages/02_Log_Attivita.py)
-- Modificati: [requirements.txt](requirements.txt) (rimosse dipendenze autenticazione)
-- Rimossi: `config.yaml`, `auth.py`, `hash_password.py`, vecchie pages con autenticazione
-- Focus: Applicazione semplificata senza login, unico utente generico
+- **Personalizzazione interfaccia utente**:
+  - Rinominata pagina principale in "Generazione .csv per Sifer"
+  - Rinominata pagina database in "Funzionalità database" con protezione password
+  - Aggiunta protezione password (nidi2025) a pagine sensibili
+  - Rimossi pulsanti download Quadro di Controllo (solo visualizzazione)
+  - Aggiornato testo informativo sulla nota SIFER
+- **Struttura file:**
+  - Rinominato: `pages/01_Carica_Salva.py` → `pages/01_Funzionalita_database.py`
+  - Modificati: [app.py](app.py), [pages/02_Log_Attivita.py](pages/02_Log_Attivita.py)
+  - Rimosso: `pages/__init_.py` (file vuoto e inutile)
+- Focus: Interfaccia semplificata con protezione selettiva delle funzionalità avanzate

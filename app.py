@@ -13,7 +13,7 @@ import csv
 from typing import Union, Tuple, List, Any
 
 # Configurazione pagina
-st.set_page_config(page_title="Verifica Dati - Centri Estivi", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Generazione .csv per Sifer", layout="wide", initial_sidebar_state="expanded")
 
 # --- Costanti ---
 NOMI_COLONNE_PASTED_DATA = [
@@ -137,11 +137,11 @@ def convert_df_to_sifer_csv_bytes(df_input: pd.DataFrame) -> bytes:
 
 # --- Funzioni UI ---
 def render_verifica_dati_page():
-    st.title("📝 Verifica Dati - Centri Estivi")
-    log_activity("Utente", "PAGE_VIEW", "Verifica e Download")
+    st.title("📝 Generazione .csv per Sifer")
+    log_activity("Utente", "PAGE_VIEW", "Generazione CSV Sifer")
 
     st.markdown("Benvenuto! Inserisci dati, incolla spese da Excel (15 colonne), verifica e scarica.")
-    st.info(f"**Nota:** I dati verificati qui **NON** vengono salvati automaticamente. Dovrai caricare il file CSV per SIFER (formato: {VERSIONE_TRACCIATO_SIFER}) scaricato nel sistema SIFER, se previsto.")
+    st.info("**Nota:** I dati verificati qui **NON** vengono salvati automaticamente in Sifer. Dovrai caricare il file CSV scaricato su SIFER tramite l'apposita interfaccia.")
 
     st.subheader("1. Dati Generali del Documento")
 
@@ -335,23 +335,15 @@ def render_verifica_dati_page():
 
                 with results_container.expander("📊 5. Quadro di Controllo (basato su dati app)", expanded=True):
                     qc_data = {
-                        "Voce": ["Tot. costi diretti (A - Contr. FSE)", 
+                        "Voce": ["Tot. costi diretti (A - Contr. FSE)",
                                  "Tot. quote a carico destinatario (C)"],
-                        "Valore (€)": [df_for_sifer_export['valore_contributo_fse'].sum(), 
+                        "Valore (€)": [df_for_sifer_export['valore_contributo_fse'].sum(),
                                      df_for_sifer_export['quota_retta_destinatario'].sum()]
                     }
                     df_qc = pd.DataFrame(qc_data)
                     df_qc_display = df_qc.copy()
                     df_qc_display["Valore (€)"] = df_qc_display["Valore (€)"].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                     st.dataframe(df_qc_display, hide_index=True, use_container_width=True)
-
-                    qc_csv_bytes = df_qc.to_csv(index=False,sep=';',decimal=',',encoding='utf-8-sig').encode('utf-8-sig')
-                    fn_qc_csv = generate_timestamp_filename("QuadroControllo", rif_pa_s, False) + ".csv"
-                    st.download_button("📥 Scarica Quadro CSV", qc_csv_bytes, fn_qc_csv, 'text/csv', key="rich_qc_csv")
-
-                    qc_excel_bytes = convert_df_to_excel_bytes(df_qc)
-                    fn_qc_excel = generate_timestamp_filename("QuadroControllo_Excel", rif_pa_s, False) + ".xlsx"
-                    st.download_button("📄 Scarica Quadro Excel", qc_excel_bytes, fn_qc_excel, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="rich_qc_excel")
 
             elif df_validation_results.empty and not pasted_data.strip():
                 results_container.info("Nessun dato valido incollato.")
@@ -398,8 +390,8 @@ if __name__ == "__main__":
     st.sidebar.info("Applicazione per la gestione e validazione dati spese Centri Estivi")
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📄 Pagine disponibili")
-    st.sidebar.markdown("- **Verifica Dati**: Valida e scarica CSV SIFER")
-    st.sidebar.markdown("- **Carica e Salva**: Carica CSV SIFER e salva in DB")
+    st.sidebar.markdown("- **Generazione .csv per Sifer**: Valida e scarica CSV SIFER")
+    st.sidebar.markdown("- **Funzionalità database**: Carica CSV SIFER e salva in DB")
     st.sidebar.markdown("- **Log Attività**: Visualizza log operazioni")
 
     # Renderizza la pagina principale
